@@ -1,14 +1,43 @@
+import * as Y from 'yjs'
+import { equals } from 'ramda'
 import Quill from 'quill'
 import QuillCursors from 'quill-cursors'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { QuillBinding } from 'y-quill'
 import './App.css'
 import 'quill/dist/quill.snow.css'
+
+const ydoc = new Y.Doc()
+const ytext = ydoc.getText('quill')
 
 Quill.register('modules/cursors', QuillCursors)
 
 export default function App() {
   const quill = useRef<Quill>(null)
+  const quillBinding = useRef<QuillBinding>(null)
   const editorDiv = useRef<HTMLDivElement>(null)
+
+  const prevTextState = useRef<unknown>(null)
+
+  const textState = useSyncExternalStore(
+    (callback) => {
+      ytext.observe(callback)
+
+      return () => {
+        ytext.unobserve(callback)
+      }
+    },
+    () => {
+      const state = ytext.toDelta()
+
+      if (equals(state, prevTextState.current)) {
+        return prevTextState.current
+      }
+
+      prevTextState.current = state
+      return state
+    },
+  )
 
   useEffect(() => {
     if (editorDiv.current && !quill.current) {
@@ -29,6 +58,7 @@ export default function App() {
         placeholder: 'Start collaborating...',
         theme: 'snow',
       })
+      quillBinding.current = new QuillBinding(ytext, quill.current)
     }
   })
 
@@ -38,6 +68,10 @@ export default function App() {
       <div id="editor" ref={editorDiv} className="w-full">
         Hello World
       </div>
+      <h1 className="mt-5">Internal Text State</h1>
+      <pre className="w-full h-96 overflow-auto">
+        {JSON.stringify(textState, null, 2)}
+      </pre>
     </main>
   )
 }
